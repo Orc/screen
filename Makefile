@@ -1,5 +1,6 @@
 CFILES= screen.c ansi.c
 OFILES= screen.o ansi.o
+CFLAGS+= -std=c89
 
 screen: $(OFILES)
 	cc $(CFLAGS) -o screen $(OFILES) -ltermcap
