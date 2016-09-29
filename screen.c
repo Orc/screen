@@ -22,6 +22,8 @@ static char ScreenVersion[] = "screen 1.1b 20-Mar-87";
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
+#include <stdarg.h>
+#include <string.h>
 #include "screen.h"
 
 #define MAXWIN     10
@@ -42,9 +44,6 @@ extern status;
 extern time_t TimeDisplayed;
 extern char AnsiVersion[];
 extern short ospeed;
-extern errno;
-extern sys_nerr;
-extern char *sys_errlist[];
 extern char *rindex(), *malloc(), *getenv(), *MakeTermcap(), *ttyname();
 static SigChld();
 static char *Filename(), **SaveArgs();
@@ -126,6 +125,8 @@ char *KeyNames[] = {
     "select4", "select5", "select6", "select7", "select8", "select9",
     0
 };
+
+#include "screen.proto"
 
 main (ac, av) char **av; {
     register n, len;
@@ -322,17 +323,17 @@ static CheckWindows () {
      */
     if (!curr && other) {
 	SwitchWindow (OtherNum);
-	return;
+	return 0;
     }
     if (curr && !other) {
 	SetCurrWindow (CurrNum);
-	return;
+	return 0;
     }
     for (pp = wtab; pp < wtab+MAXWIN; ++pp) {
 	if (*pp) {
 	    if (!curr)
 		SwitchWindow (pp-wtab);
-	    return;
+	    return 0;
 	}
     }
     SetTTY (0, &OldMode);
@@ -437,7 +438,7 @@ static ProcessInput (buf, len) char *buf; {
 
 static SwitchWindow (n) {
     if (!wtab[n])
-	return;
+	return 0;
     SetCurrWindow (n);
     Activate (wtab[n]);
 }
@@ -597,7 +598,7 @@ static DumpWindow () {
     sprintf (fn, "hardcopy.%d", CurrNum);
     if ((f = fopen (fn, "w")) == NULL) {
 	Msg (0, "Cannot open \"%s\".", fn);
-	return;
+	return 0;
     }
     Msg (0, "Dumping screen image...");
     for (i = 0; i < rows; ++i) {
@@ -765,13 +766,19 @@ static SendCreateMsg (s, ac, av, aflag) char **av; {
 }
 
 /*VARARGS1*/
-static SendErrorMsg (fmt, p1, p2, p3, p4, p5, p6) char *fmt; {
+static SendErrorMsg (char *fmt, ...) {
     register s;
     struct msg m;
+    va_list ptr;
+
 
     s = MakeClientSocket ();
     m.type = MSG_ERROR;
-    sprintf (m.m.message, fmt, p1, p2, p3, p4, p5, p6);
+    
+    va_start(ptr,fmt);
+    vsnprintf (m.m.message, sizeof m.m.message, fmt, ptr);
+    va_end(ptr);
+    
     (void) write (s, &m, sizeof (m));
     close (s);
 }
@@ -784,7 +791,7 @@ static ReceiveMsg (s) {
 
     if ((ns = accept (s, (struct sockaddr *)&sun, &len)) == -1) {
 	Msg (errno, "accept");
-	return;
+	return 0;
     }
     if ((len = read (ns, &m, sizeof (m))) != sizeof (m)) {
 	if (len == -1)
@@ -792,7 +799,7 @@ static ReceiveMsg (s) {
 	else
 	    Msg (0, "Short message (%d bytes)", len);
 	close (ns);
-	return;
+	return 0;
     }
     switch (m.type) {
     case MSG_CREATE:
@@ -831,7 +838,7 @@ static ReadRc (fn) char *fn; {
 
     ap = args;
     if ((f = fopen (fn, "r")) == NULL)
-	return;
+	return 0;
     while (fgets (buf, 256, f) != NULL) {
 	if (p = rindex (buf, '\n'))
 	    *p = '\0';
@@ -969,11 +976,15 @@ static IsSymbol (e, s) register char *e, *s; {
 }
 
 /*VARARGS2*/
-Msg (err, fmt, p1, p2, p3, p4, p5, p6) char *fmt; {
+Msg (int err, char *fmt, ...) {
     char buf[1024];
     register char *p = buf;
+    va_list ptr;
 
-    sprintf (p, fmt, p1, p2, p3, p4, p5, p6);
+    va_start(ptr,fmt);
+    vsnprintf (p, sizeof buf / 2, fmt, ptr);
+    va_end(ptr);
+    
     if (err) {
 	p += strlen (p);
 	if (err > 0 && err < sys_nerr)

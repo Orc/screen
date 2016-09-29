@@ -78,6 +78,8 @@ SC|screen|VT 100/ANSI X3.64 virtual terminal|\\\n\
 \t:cd=\\E[J:ce=\\E[K:cl=\\E[2J\\E[H:cm=\\E[%i%d;%dH:ct=\\E[3g:\\\n\
 \t:do=\\E[B:nd=\\E[C:pt:rc=\\E8:rs=\\Ec:sc=\\E7:st=\\EH:up=\\E[A:";
 
+#include "ansi.proto"
+
 InitTerm () {
     register char *s;
 
@@ -322,7 +324,7 @@ WriteString (wp, buf, len) struct win *wp; register char *buf; {
     register c, intermediate = 0;
 
     if (!len)
-	return;
+	return 0;
     curr = wp;
     display = curr->active;
     if (display)
@@ -343,7 +345,7 @@ NextChar:
 			if (len > 1) {
 			    curr->outlen = len-1;
 			    bcopy (buf, curr->outbuf, curr->outlen);
-			    return;
+			    return 0;
 			}
 		    }
 		    break;
@@ -756,7 +758,7 @@ static Goto (y1, x1, y2, x2) {
     enum move_t xm = M_NONE, ym = M_NONE;
 
     if (!display)
-	return;
+	return 0;
     if (x1 == cols || x2 == cols) {
 	if (x2 == cols) --x2;
 	goto DoCM;
@@ -764,11 +766,11 @@ static Goto (y1, x1, y2, x2) {
     dx = x2 - x1;
     dy = y2 - y1;
     if (dy == 0 && dx == 0)
-	return;
+	return 0;
     if (y1 == -1 || x1 == -1) {
 DoCM:
 	PutStr (tgoto (CM, x2, y2));
-	return;
+	return 0;
     }
     CMcost = CalcCost (tgoto (CM, x2, y2));
     if (dx > 0) {
@@ -903,7 +905,7 @@ static InsertAChar (c) {
     bcopy (curr->attr[y]+x, curr->attr[y]+x+1, cols-x-1);
     SetChar (c);
     if (!display)
-	return;
+	return 0;
     if (IC || IM) {
 	if (!curr->insert)
 	    PutStr (IM);
@@ -922,7 +924,7 @@ static InsertChar (n) {
     register i, y = curr->y, x = curr->x;
 
     if (x == cols)
-	return;
+	return 0;
     bcopy (curr->image[y], OldImage, cols);
     bcopy (curr->attr[y], OldAttr, cols);
     if (n > cols-x)
@@ -931,7 +933,7 @@ static InsertChar (n) {
     bcopy (curr->attr[y]+x, curr->attr[y]+x+n, cols-x-n);
     ClearInLine (0, y, x, x+n-1);
     if (!display)
-	return;
+	return 0;
     if (IC || IM) {
 	if (!curr->insert)
 	    PutStr (IM);
@@ -952,7 +954,7 @@ static DeleteChar (n) {
     register i, y = curr->y, x = curr->x;
 
     if (x == cols)
-	return;
+	return 0;
     bcopy (curr->image[y], OldImage, cols);
     bcopy (curr->attr[y], OldAttr, cols);
     if (n > cols-x)
@@ -961,7 +963,7 @@ static DeleteChar (n) {
     bcopy (curr->attr[y]+x+n, curr->attr[y]+x, cols-x-n);
     ClearInLine (0, y, cols-n, cols-1);
     if (!display)
-	return;
+	return 0;
     if (DC) {
 	for (i = n; i; i--)
 	    PutStr (DC);
@@ -1138,12 +1140,12 @@ static ClearInLine (displ, y, x1, x2) {
 		Goto (curr->y, curr->x, y, x1);
 		curr->y = y; curr->x = x1;
 		PutStr (CE);
-		return;
+		return 0;
 	    }
 	    if (y == rows-1 && AM)
 		--n;
 	    if (n == 0)
-		return;
+		return 0;
 	    SaveAttr ();
 	    Goto (curr->y, curr->x, y, x1);
 	    for (i = n; i > 0; i--)
@@ -1158,7 +1160,7 @@ static CursorRight (n) register n; {
     register x = curr->x;
 
     if (x == cols)
-	return;
+	return 0;
     if ((curr->x += n) >= cols)
 	curr->x = cols-1;
     Goto (curr->y, x, curr->y, curr->x);
@@ -1245,7 +1247,7 @@ static NewRendition (old, new) register old, new; {
     register i;
 
     if (old == new)
-	return;
+	return 0;
     for (i = 1; i <= A_MAX; i <<= 1) {
 	if ((old & i) && !(new & i)) {
 	    PutStr (UE);
@@ -1257,7 +1259,7 @@ static NewRendition (old, new) register old, new; {
 	    if (new & A_BD) PutStr (MD);
 	    if (new & A_DI) PutStr (MH);
 	    if (new & A_RV) PutStr (MR);
-	    return;
+	    return 0;
 	}
     }
     if ((new & A_US) && !(old & A_US))
@@ -1386,7 +1388,7 @@ RemoveStatus (p) struct win *p; {
     int odisplay = display;
 
     if (!status)
-	return;
+	return 0;
     status = 0;
     curr = p;
     display = 1;
